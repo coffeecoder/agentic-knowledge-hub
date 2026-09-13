@@ -56,3 +56,4 @@ Use only synthetic or public content in this portfolio repository. Never add HP,
 
 - [Technical learning index](docs/learning/README.md)
 - [Docker reference](docs/learning/docker_info.md)
+- [Git and GitHub reference](docs/learning/git_github_info.md)

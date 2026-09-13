@@ -38,10 +38,10 @@ On macOS, start Docker Desktop before running container commands.
 Move to the project directory:
 
 ```bash
-cd ~/Downloads/agentic-knowledge-hub
+cd "/Users/mashoodahmed/Documents/KB Portal/agentic-knowledge-hub"
 ```
 
-Check the current directory and Compose file:
+Use your own checkout path if it differs. Check the current directory and Compose file:
 
 ```bash
 pwd
@@ -77,11 +77,19 @@ For this project, Docker Compose:
 
 1. Pulls `pgvector/pgvector:pg16` if it is not already available.
 2. Creates a PostgreSQL container with pgvector support.
-3. Creates the local database and user named `akh`.
+3. On an empty data directory, initializes the local database and user named `akh`.
 4. Maps Mac port `5432` to container port `5432`.
 5. Mounts `database/schema.sql` for first-time database initialization.
 6. Stores database files in the persistent `akh-postgres` volume.
 7. Runs `pg_isready` as a health check.
+
+`up` also reconciles configuration changes and may recreate an existing container. A selected service can start its declared dependencies; `postgres` has none here. Detached mode returns control to the terminal without waiting for database readiness. Check `docker compose ps` and the logs before connecting.
+
+The logical volume key is `akh-postgres`; Docker normally prefixes its actual name with the Compose project name. The schema mount is a read-only bind mount from this checkout, while the database volume is Docker-managed storage.
+
+The Compose file currently defines only PostgreSQL, so starting all services has the same effect here. It does not build or start the API. Follow the [root README](../../README.md#start-locally) to run FastAPI in the local Python environment.
+
+The checked-in database password `akh` is a local development default. The current `5432:5432` mapping is not restricted to loopback. Do not use these defaults for a publicly reachable database. Changing `.env` alone does not change these hard-coded Compose credentials.
 
 Start every service defined in the Compose file:
 
@@ -120,7 +128,7 @@ docker compose down
 |---|---|
 | `stop` | Stops a container without removing it. |
 | `start` | Starts an existing stopped container. |
-| `restart` | Stops and starts the container. |
+| `restart` | Stops and starts the container; does not apply changed Compose configuration. Use `up -d` for that. |
 | `down` | Stops and removes the project's containers and network. Named volumes remain by default. |
 
 ## 6. Open a shell or PostgreSQL session
@@ -136,6 +144,14 @@ Open PostgreSQL directly:
 ```bash
 docker compose exec postgres psql -U akh -d akh
 ```
+
+If `psql` is installed on the Mac, connect through the published port:
+
+```bash
+psql -h localhost -p 5432 -U akh -d akh
+```
+
+Enter the local development password when prompted. Inside a future Compose application container, the hostname would be `postgres`, not `localhost`.
 
 Useful commands inside `psql`:
 
@@ -178,7 +194,13 @@ docker-compose.yaml
 docker-compose.yml
 ```
 
-Use `-f` for a custom filename:
+`compose.yaml` is preferred by Docker, but this repository uses `docker-compose.yml`. No rename is needed. Specify this project's file explicitly with:
+
+```bash
+docker compose -f docker-compose.yml up -d postgres
+```
+
+Use `-f` for a custom filename (the following custom files are examples, not files in this repository):
 
 ```bash
 docker compose -f compose.dev.yml up -d
@@ -187,14 +209,14 @@ docker compose -f compose.dev.yml up -d
 Combine a base file with an environment-specific override:
 
 ```bash
-docker compose -f compose.yml -f compose.local.yml up -d
+docker compose -f docker-compose.yml -f compose.local.yml up -d
 ```
 
-Later files extend or override values from earlier files. The Compose filename and service name are different: `postgres` is defined below `services:` inside the YAML file.
+Use the same file selection for status, logs, and shutdown. Alternatively, set `COMPOSE_FILE=docker-compose.yml` for a command or shell session. Later files extend or override values from earlier files. The Compose filename and service name are different: `postgres` is defined below `services:` inside the YAML file.
 
 ## 9. Build application images
 
-Build the image described by a service's Dockerfile:
+This project's `postgres` service uses a prebuilt image and has no `build:` configuration. These generic Compose build commands apply only after a service defines one:
 
 ```bash
 docker compose build
@@ -256,7 +278,7 @@ docker compose config --services
 
 ### `command not found: docker`
 
-First verify that Docker Desktop is running. If Docker works in the macOS Terminal but not in an IDE terminal, the IDE probably has an older or different `PATH` environment.
+This means the shell cannot find the CLI. Check that Docker Desktop is installed and its CLI is on `PATH`; starting the engine alone does not fix a missing executable. If Docker works in the macOS Terminal but not in an IDE terminal, the IDE probably has an older or different `PATH` environment.
 
 ```bash
 command -v docker
@@ -264,6 +286,25 @@ echo "$PATH"
 ```
 
 Completely restart the IDE after starting Docker Desktop, or use the macOS Terminal for Docker commands.
+
+### Cannot connect to the Docker daemon
+
+Start Docker Desktop and wait for its engine to be ready. Inspect the selected context:
+
+```bash
+docker context ls
+docker info
+```
+
+If a stale remote context is selected, choose the intended local Desktop context from the list with `docker context use CONTEXT_NAME`. Do not switch blindly if you intentionally use a remote engine.
+
+### No configuration file found
+
+Run from the checkout root, or supply the full Compose path with `-f`. Quote paths containing spaces, such as `KB Portal`.
+
+### macOS mounts or image startup fail
+
+For a mount denied error, check Docker Desktop file-sharing access to the checkout and confirm `database/schema.sql` exists. On Apple silicon, an `exec format error` or missing platform manifest can indicate an incompatible image architecture; inspect the image/platform before forcing emulation. Check Docker Desktop disk and memory availability if startup stalls. Review logs locally; do not share credentials or document content from diagnostics.
 
 ### Port `5432` is already in use
 
@@ -273,7 +314,7 @@ Find containers using published ports:
 docker ps
 ```
 
-A local PostgreSQL installation or another container may already be using port `5432`. Stop the conflicting process or deliberately change the host side of the Compose mapping, for example `5433:5432`.
+A local PostgreSQL installation or another container may already be using port `5432`. Use `lsof -nP -iTCP:5432 -sTCP:LISTEN` to identify a Mac process. Stop a conflicting process only if you own it and know it is safe, or deliberately change the host side of the Compose mapping, for example `5433:5432`, and update the application connection port as well.
 
 ### Container starts and then exits
 
@@ -290,7 +331,7 @@ Files in `/docker-entrypoint-initdb.d/` execute only when PostgreSQL initializes
 
 ## 12. Interview refresh
 
-- A container shares the host kernel but has isolated processes, networking, and filesystem views; a virtual machine includes a guest operating system.
+- A container shares its Docker engine host kernel but has isolated processes, networking, and filesystem views; a virtual machine includes a guest operating system. On macOS, Docker Desktop runs Linux containers inside a Linux VM.
 - Images are immutable layers. Containers add a writable runtime layer.
 - Container files are ephemeral unless important state is stored in a volume or external service.
 - `EXPOSE` documents an intended container port; publishing with `-p` or a Compose `ports` mapping makes it reachable through the host.
@@ -302,7 +343,7 @@ Files in `/docker-entrypoint-initdb.d/` execute only when PostgreSQL initializes
 ## 13. Recommended daily sequence
 
 ```bash
-cd ~/Downloads/agentic-knowledge-hub
+cd "/Users/mashoodahmed/Documents/KB Portal/agentic-knowledge-hub"
 docker compose up -d postgres
 docker compose ps
 docker compose logs --tail 50 postgres
@@ -315,3 +356,11 @@ docker compose down
 ```
 
 Using `down` without `-v` keeps the database volume for the next session.
+
+## 14. Official references
+
+- [Docker Compose model and filenames](https://docs.docker.com/compose/intro/compose-application-model/)
+- [Compose CLI and file selection](https://docs.docker.com/reference/cli/docker/compose/)
+- [Compose lifecycle overview](https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-docker-compose/)
+
+Return to the [learning index](README.md).
