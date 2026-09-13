@@ -52,3 +52,7 @@ Use only synthetic or public content in this portfolio repository. Never add HP,
 - [High-level design](docs/high-level-design.pdf)
 - [Complete architecture](docs/complete-architecture.png)
 
+## Learning notes
+
+- [Technical learning index](docs/learning/README.md)
+- [Docker reference](docs/learning/docker_info.md)
