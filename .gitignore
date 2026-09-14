@@ -11,3 +11,6 @@ htmlcov/
 dist/
 build/
 
+target/
+*.class
+*.log

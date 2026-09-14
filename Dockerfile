@@ -1,12 +1,16 @@
-FROM python:3.12-slim
+FROM eclipse-temurin:21-jdk-jammy AS build
+WORKDIR /workspace
+COPY .mvn .mvn
+COPY mvnw pom.xml ./
+RUN chmod +x mvnw
+COPY src src
+RUN ./mvnw -B -ntp -DskipTests package
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+FROM eclipse-temurin:21-jre-jammy
+RUN groupadd --gid 10001 appuser && useradd --uid 10001 --gid 10001 --create-home appuser
 WORKDIR /app
-COPY pyproject.toml README.md ./
-COPY src ./src
-RUN pip install --no-cache-dir .
-RUN useradd --create-home --uid 10001 appuser
+COPY --from=build --chown=appuser:appuser /workspace/target/agentic-knowledge-hub-0.1.0.jar app.jar
 USER appuser
+ENV PORT=8080
 EXPOSE 8080
-CMD ["uvicorn", "akh.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
-
+ENTRYPOINT ["java", "-jar", "app.jar"]

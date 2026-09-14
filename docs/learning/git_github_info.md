@@ -82,12 +82,11 @@ git switch -c codex/learning-handbook
 Make the intended changes, then inspect and validate. These are the repository's required pre-commit checks from [AGENTS.md](../../AGENTS.md):
 
 ```bash
-python -m unittest discover -s tests -p 'test_*.py'
-python -m compileall -q src tests
+./mvnw verify
 git diff --check
 ```
 
-Use the project's activated virtual environment and installed dependencies. Behavior changes require tests. Documentation-only edits should also have their links, commands, and Markdown reviewed. The current [CI workflow](../../.github/workflows/ci.yml) runs Ruff, pytest with coverage, and compilation on pull requests and pushes to `main` or `develop`.
+Use JDK 21 and the checked-in Maven wrapper. Run `./mvnw spotless:apply` before verification when Java formatting needs updating. Behavior changes require tests. Documentation-only edits should also have their links, commands, and Markdown reviewed. The current [CI workflow](../../.github/workflows/ci.yml) runs Maven verification (compilation, JUnit tests, JAR packaging, and formatting checks) on pull requests and pushes to `main` or `develop`.
 
 When ready to commit and publish, stage only the intended files and review the staging area:
 
@@ -133,7 +132,7 @@ git stash apply 'stash@{0}'
 
 ## 6. .gitignore and security
 
-The current [.gitignore](../../.gitignore) excludes `.env`, `.venv/`, Python caches, coverage output, IDE settings, build output, and `.DS_Store`. It does not automatically exclude every credential file, `.env` variant, or confidential document.
+The current [.gitignore](../../.gitignore) excludes `.env`, `.venv/`, historical Python caches and coverage output, Java/Maven `target/` and class files, IDE settings, build output, and `.DS_Store`. It does not automatically exclude every credential file, `.env` variant, or confidential document.
 
 ```bash
 git check-ignore -v .env

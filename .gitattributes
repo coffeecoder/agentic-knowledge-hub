@@ -1,0 +1,3 @@
+# Keep wrapper scripts portable and store normalized line endings in Git.
+/mvnw text eol=lf
+/mvnw.cmd text eol=crlf

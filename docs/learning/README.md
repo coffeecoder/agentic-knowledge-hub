@@ -4,12 +4,13 @@ This directory is a practical reference for technologies used by Agentic Knowled
 
 ## Available notes
 
+- [Java, Spring, and senior-architect learning path](java_spring_architect_info.md) — code walkthrough, design principles, transaction exercises, GCP, and Agentic AI milestones
+
 - [Docker reference](docker_info.md) — concepts, project commands, PostgreSQL access, macOS troubleshooting, and interview notes
 - [Git and GitHub reference](git_github_info.md) — authentication, everyday commands, branches, pull requests, safe undo, security, and interview notes
 
 ## Planned notes
 
-- `python_info.md` — virtual environments, packages, FastAPI, and testing
 - `postgres_pgvector_info.md` — PostgreSQL, SQL, indexes, and vector search
 - `gcp_info.md` — projects, IAM, Cloud Run, Cloud SQL, Storage, and Pub/Sub
 - `vertex_ai_info.md` — embeddings, Gemini, quotas, and grounding
@@ -18,4 +19,4 @@ This directory is a practical reference for technologies used by Agentic Knowled
 
 Keep the root `README.md` focused on running and understanding the application. Store reusable learning material here so it can grow without making the project overview difficult to navigate.
 
-Suggested order: learn the Git workflow, start the project database using the Docker guide, then follow the [project setup and validation instructions](../../README.md).
+Suggested order: run the [Java project](../../README.md), read the Java/Spring learning path, then use the Git and Docker references during each milestone. Python source is historical; the active implementation is Java.

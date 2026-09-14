@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+.venv
+.idea
+.vscode
+target
+**/__pycache__
+docs
+sample-data

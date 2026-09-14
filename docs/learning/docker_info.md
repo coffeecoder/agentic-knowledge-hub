@@ -87,7 +87,7 @@ For this project, Docker Compose:
 
 The logical volume key is `akh-postgres`; Docker normally prefixes its actual name with the Compose project name. The schema mount is a read-only bind mount from this checkout, while the database volume is Docker-managed storage.
 
-The Compose file currently defines only PostgreSQL, so starting all services has the same effect here. It does not build or start the API. Follow the [root README](../../README.md#start-locally) to run FastAPI in the local Python environment.
+The Compose file currently defines only PostgreSQL, so starting all services has the same effect here. It does not build or start the API. Follow the [root README](../../README.md#start-locally) to run Spring Boot with the Maven wrapper.
 
 The checked-in database password `akh` is a local development default. The current `5432:5432` mapping is not restricted to loopback. Do not use these defaults for a publicly reachable database. Changing `.env` alone does not change these hard-coded Compose credentials.
 
@@ -215,6 +215,8 @@ docker compose -f docker-compose.yml -f compose.local.yml up -d
 Use the same file selection for status, logs, and shutdown. Alternatively, set `COMPOSE_FILE=docker-compose.yml` for a command or shell session. Later files extend or override values from earlier files. The Compose filename and service name are different: `postgres` is defined below `services:` inside the YAML file.
 
 ## 9. Build application images
+
+The Java Dockerfile uses a JDK 21 build stage and a non-root JRE 21 runtime. It runs the executable Spring Boot JAR. After building with the direct Docker command below, run it with `docker run --rm -p 8000:8080 agentic-knowledge-hub:local`. The application container defaults to port `8080`; local Maven execution defaults to `8000`. Neither currently connects to PostgreSQL.
 
 This project's `postgres` service uses a prebuilt image and has no `build:` configuration. These generic Compose build commands apply only after a service defines one:
 
