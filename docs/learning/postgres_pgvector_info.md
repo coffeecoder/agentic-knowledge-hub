@@ -74,11 +74,52 @@ If multiple upstream versions already exist for one logical document, V2 stops b
 
 Use synthetic text in the API documentation at `/docs`. Send the same request twice, then change its text and send it again. Expected statuses: CHANGED, UNCHANGED, CHANGED.
 
+From the project root, open PostgreSQL's terminal:
+
 ```bash
 docker compose exec postgres psql -U akh -d akh
 ```
 
-Inside psql, inspect metadata without dumping source content:
+`postgres` is the Compose service, `-U akh` selects the database user, and `-d akh` selects the database. Run the remaining commands inside `psql`. SQL statements end with a semicolon; psql backslash commands do not need one.
+
+List tables and inspect their structures:
+
+```text
+\dt
+\d documents
+\d chunks
+```
+
+Inspect sources, documents, and the number of chunks stored for each document:
+
+```sql
+SELECT source_id, tenant_id, source_type, name
+FROM sources;
+
+SELECT document_id, external_id, title, source_version,
+       content_hash, processing_version, updated_at
+FROM documents;
+
+SELECT d.external_id, d.title, COUNT(c.chunk_id) AS chunk_count
+FROM documents d
+LEFT JOIN chunks c ON c.document_id = d.document_id
+GROUP BY d.document_id
+ORDER BY d.external_id;
+```
+
+For your synthetic learning data, inspect the chunk text and stored citation metadata:
+
+```sql
+SELECT document_id, ordinal, content, word_count
+FROM chunks
+ORDER BY document_id, ordinal;
+
+SELECT chunk_id, jsonb_pretty(citation) AS citation
+FROM chunks
+ORDER BY document_id, ordinal;
+```
+
+Inspect migration history, checksums, counts, and citation anchors:
 
 ```sql
 SELECT installed_rank, version, description, success
@@ -93,6 +134,24 @@ SELECT chunk_id, ordinal, word_count, token_count,
        page_number, line_start, line_end
 FROM chunks ORDER BY document_id, ordinal;
 ```
+
+For wide output, enable automatic expanded display:
+
+```text
+\x auto
+```
+
+Exit psql with:
+
+```text
+\q
+```
+
+Learning exercise:
+
+1. Ingest a synthetic document through Swagger at `/docs`, then inspect its document and chunk rows.
+2. Repeat the same request. It should return `UNCHANGED`, with the same stored chunk count and document `updated_at`.
+3. Change the text and submit again. It should return `CHANGED`; the document ID remains stable while its chunks are replaced.
 
 `UNCHANGED` returns zero newly produced chunks, while the database still contains the prior chunk set. Empty input returns EMPTY and does not delete it. Changing source metadata or processing revision causes CHANGED even for equal source bytes.
 
