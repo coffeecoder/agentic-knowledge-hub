@@ -4,40 +4,67 @@ import static com.agenticknowledgehub.ingestion.IngestionResult.Status.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.agenticknowledgehub.chunking.SemanticChunker;
-import com.agenticknowledgehub.ingestion.IngestionService;
+import com.agenticknowledgehub.ingestion.*;
 import com.agenticknowledgehub.parsers.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 class IngestionServiceTest {
-  private final IngestionService service =
-      new IngestionService(
-          new ParserRegistry(List.of(new TextParser())), new SemanticChunker(20, 3));
-
   @Test
-  void comparesCallerSuppliedChecksumButDoesNotPretendToPersist() {
-    var document = TestDocuments.text("some useful knowledge");
-    var first = service.ingest(document);
-    assertEquals(CHANGED, first.status());
-    var second = service.ingest(document, first.contentHash());
-    assertEquals(UNCHANGED, second.status());
-    assertTrue(second.chunks().isEmpty());
-    assertEquals(CHANGED, service.ingest(document).status());
+  void preparesEvidenceAndProcessingVersionBeforeCallingWriter() {
+    var captured = new AtomicReference<PreparedDocument>();
+    var writer =
+        new TransactionalDocumentWriter(null) {
+          @Override
+          public IngestionResult write(PreparedDocument prepared) {
+            captured.set(prepared);
+            return new IngestionResult(CHANGED, prepared.contentHash(), prepared.chunks());
+          }
+        };
+    var service = service(writer);
+    assertEquals(CHANGED, service.ingest(TestDocuments.text("useful evidence")).status());
+    assertEquals("parsers-v1/chunker-v2:20:3", captured.get().processingVersion());
+    assertEquals(TestDocuments.SCOPE, captured.get().scope());
+    assertEquals(1, captured.get().chunks().size());
   }
 
   @Test
-  void changedContentProducesDifferentHashAndChunks() {
-    var first = service.ingest(TestDocuments.text("Original evidence"));
-    var changed = service.ingest(TestDocuments.text("Updated evidence"), first.contentHash());
-    assertEquals(CHANGED, changed.status());
-    assertNotEquals(first.contentHash(), changed.contentHash());
-    assertNotEquals(first.chunks().getFirst().chunkId(), changed.chunks().getFirst().chunkId());
+  void whitespaceDoesNotCallWriter() {
+    var writer =
+        new TransactionalDocumentWriter(null) {
+          @Override
+          public IngestionResult write(PreparedDocument prepared) {
+            fail("Empty must not write");
+            return null;
+          }
+        };
+    assertEquals(EMPTY, service(writer).ingest(TestDocuments.text(" \n\t")).status());
   }
 
   @Test
-  void whitespaceIsEmpty() {
-    var result = service.ingest(TestDocuments.text(" \n\t"));
-    assertEquals(EMPTY, result.status());
-    assertTrue(result.chunks().isEmpty());
+  void databaseFailureDoesNotLeakJdbcDetails() {
+    var writer =
+        new TransactionalDocumentWriter(null) {
+          @Override
+          public IngestionResult write(PreparedDocument prepared) {
+            throw new DataAccessResourceFailureException("synthetic-sensitive SQL parameters");
+          }
+        };
+    var error =
+        assertThrows(
+            PersistenceUnavailableException.class,
+            () -> service(writer).ingest(TestDocuments.text("evidence")));
+    assertNull(error.getCause());
+    assertFalse(error.getMessage().contains("sensitive"));
+  }
+
+  private IngestionService service(TransactionalDocumentWriter writer) {
+    return new IngestionService(
+        new ParserRegistry(List.of(new TextParser())),
+        new SemanticChunker(20, 3),
+        writer,
+        TestDocuments.SCOPE);
   }
 }

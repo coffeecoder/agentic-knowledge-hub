@@ -1,13 +1,13 @@
 # Java, Spring, and Senior-Architect Learning Path
 
-Use this project to explain decisions, demonstrate failure cases, and discuss tradeoffs. Completing a chapter is not the same as implementing the corresponding production capability. The Java migration is the current baseline; database persistence and cloud/AI integrations are still planned.
+Use this project to explain decisions, demonstrate failure cases, and discuss tradeoffs. Completing a chapter is not the same as implementing the corresponding production capability. Transactional PostgreSQL persistence is now implemented; cloud/AI integrations remain planned. Follow the [persistence guide](postgres_pgvector_info.md) for the current database design.
 
 ## 1. Read the application in request order
 
 1. [KnowledgeHubApplication](../../src/main/java/com/agenticknowledgehub/KnowledgeHubApplication.java) starts Spring Boot. Auto-configuration supplies the embedded HTTP server and JSON conversion.
 2. [IngestionConfiguration](../../src/main/java/com/agenticknowledgehub/config/IngestionConfiguration.java) is the composition root: it creates parsers, the chunker, and the service. A composition root centralizes wiring instead of hiding object creation throughout business logic.
 3. [DocumentController](../../src/main/java/com/agenticknowledgehub/api/DocumentController.java) validates HTTP input and maps request/response objects. It does not parse text or perform SQL.
-4. [IngestionService](../../src/main/java/com/agenticknowledgehub/ingestion/IngestionService.java) coordinates hashing, parsing, and chunking. It currently holds no document state.
+4. [IngestionService](../../src/main/java/com/agenticknowledgehub/ingestion/IngestionService.java) coordinates hashing, parsing, and chunking. It prepares evidence outside the transaction and calls the transactional writer; durable state lives in PostgreSQL.
 5. [ParserRegistry](../../src/main/java/com/agenticknowledgehub/parsers/ParserRegistry.java) selects the first supporting parser.
 6. [SemanticChunker](../../src/main/java/com/agenticknowledgehub/chunking/SemanticChunker.java) creates overlapping word windows and deterministic identifiers, preserving source anchors.
 7. [CitationManifest](../../src/main/java/com/agenticknowledgehub/citations/CitationManifest.java) checks answer references against application-owned citation IDs. It is tested independently and is not yet part of an answer-generation endpoint.
@@ -27,9 +27,9 @@ Exercise: trace a request in your debugger. Explain which objects Spring creates
 | Encapsulation | Records copy lists and byte arrays | Records alone do not make nested objects deeply immutable |
 | Separation of concerns | Domain models differ from HTTP DTOs | Some mapping code buys independence from the external API contract |
 
-Dependency injection and the dependency inversion principle are related but different. Injection describes how dependencies arrive. Dependency inversion concerns which abstractions high-level policy depends upon. The parser interface demonstrates an abstraction boundary; not every current collaborator is behind an interface. Introduce a repository port when persistence gives us a concrete reason.
+Dependency injection and the dependency inversion principle are related but different. Injection describes how dependencies arrive. Dependency inversion concerns which abstractions high-level policy depends upon. The parser interface demonstrates an abstraction boundary; not every current collaborator is behind an interface. The new `DocumentRepository` port separates write policy from PostgreSQL SQL.
 
-Planned patterns include Repository for durable document access, Adapter for cloud providers, and possibly Outbox for reliable database-to-event publication. Do not describe those as implemented today. Avoid Factory, Builder, or microservice layers until they solve a specific problem.
+Repository is now implemented for durable document access. Adapter for cloud providers and Outbox for reliable database-to-event publication remain planned. Avoid Factory, Builder, or microservice layers until they solve a specific problem.
 
 Interview drill: explain why `new TextParser()` in the composition root is acceptable, while creating a JDBC connection inside every controller method would scatter infrastructure policy.
 
@@ -46,11 +46,11 @@ Interview drill: explain why `new TextParser()` in the composition root is accep
 
 Future exercises: add typed `@ConfigurationProperties`, readiness checks, metrics, and repository injection when those features are introduced. Explain why liveness should not simply fail whenever a downstream database is temporarily unavailable.
 
-## 4. Database transactions: next implementation milestone
+## 4. Database transactions: implemented milestone
 
-The present service's optional previous hash is not durable idempotency. Restarting the application or sending a request through another instance gives it no stored history.
+The former service accepted an optional previous hash. The current service instead compares persisted state under a source lock, so retries work across service instances.
 
-The intended persistence flow must load the stored checksum, coordinate concurrent writes, and commit the document plus all chunks atomically. Review the replacement/versioning decision before changing the schema.
+The persistence flow loads the stored checksum, coordinates concurrent writes, and commits the document plus all chunks atomically. The approved policy replaces current chunks; historical reconstruction remains out of scope.
 
 | Topic | Interview explanation | Project experiment |
 |---|---|---|
@@ -63,7 +63,7 @@ The intended persistence flow must load the stored checksum, coordinate concurre
 | Optimistic concurrency | Detect a conflicting version and retry/reject | Compare a revision before updating |
 | Migration | Evolve existing state explicitly | Upgrade an existing volume without deleting it |
 
-Spring's normal proxy-based transaction interception does not intercept a method's call to another method on the same object. The transaction boundary must actually pass through the proxy. By default, unchecked exceptions trigger rollback; checked exceptions need an explicit rollback policy when appropriate. Catching and swallowing an exception can also change the outcome. A service made `final` today may need adjustment when introducing class-based transactional proxies. [Spring transaction annotations](https://docs.spring.io/spring/reference/6.2/data-access/transaction/declarative/annotations.html).
+Spring's normal proxy-based transaction interception does not intercept a method's call to another method on the same object. The transaction boundary must actually pass through the proxy. By default, unchecked exceptions trigger rollback; checked exceptions need an explicit rollback policy when appropriate. Catching and swallowing an exception can also change the outcome. The non-final `TransactionalDocumentWriter` is a separate Spring bean so class-based proxy interception applies; the preparation service remains final. [Spring transaction annotations](https://docs.spring.io/spring/reference/6.2/data-access/transaction/declarative/annotations.html).
 
 A database transaction cannot roll back an already-completed external model API call. Keep remote work outside long-held database locks and design retries deliberately. For a future Pub/Sub publisher, discuss an outbox rather than claiming a single local transaction atomically commits both SQL and a network publish.
 
@@ -108,8 +108,8 @@ Spring AI can supply model integrations, but adding a library does not solve pro
 
 ## 7. Recommended hands-on sequence
 
-1. Run `./mvnw verify`; explain the controller/service/parser boundaries and the recorded chunk-ID compatibility test.
-2. Implement PostgreSQL persistence with explicit identity, transactions, migrations, rollback tests, and concurrency tests.
+1. Run `./mvnw verify`; explain the controller/service/parser boundaries and the recorded deterministic chunk-ID test.
+2. Study the implemented PostgreSQL persistence and run its rollback/concurrency tests. Explain the source-lock throughput tradeoff and the limitation of current-only evidence.
 3. Add authenticated identity and authorization-aware retrieval; test cross-tenant and cross-group isolation.
 4. Add embeddings, retrieval, and citation-grounded answers with evaluation fixtures.
 5. Package and deploy to Cloud Run with Cloud SQL, workload identity, and observability; document cost and recovery assumptions.

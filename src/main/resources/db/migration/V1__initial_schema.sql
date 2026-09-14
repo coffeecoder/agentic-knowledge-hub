@@ -1,5 +1,3 @@
--- Legacy V1 reference only. Authoritative schema changes live in src/main/resources/db/migration/.
--- Do not rerun this file to upgrade an existing database; use Flyway.
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

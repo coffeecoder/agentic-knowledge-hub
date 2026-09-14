@@ -1,6 +1,6 @@
 # ADR 0001: Java and Spring Boot foundation
 
-Status: accepted for the language migration. PostgreSQL persistence remains a separate milestone.
+Status: accepted historical migration decision. The later [persistence decision](0002-postgresql-persistence.md) supersedes the stateless behavior, chunk-ID compatibility, and database/test configuration described here.
 
 ## Context
 

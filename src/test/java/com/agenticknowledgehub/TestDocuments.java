@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 final class TestDocuments {
+  static final SourceScope SCOPE = new SourceScope("local", "manual-text");
+
   private TestDocuments() {}
 
   static SourceDocument text(String text) {

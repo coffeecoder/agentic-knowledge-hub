@@ -10,8 +10,17 @@ public final class SemanticChunker {
   private static final Pattern WORD = Pattern.compile("\\S+", Pattern.UNICODE_CHARACTER_CLASS);
   private final int maxWords;
   private final int overlapWords;
+  private final String revision;
 
   public SemanticChunker(int maxWords, int overlapWords) {
+    this(maxWords, overlapWords, "parsers-v1/chunker-v2");
+  }
+
+  public SemanticChunker(int maxWords, int overlapWords, String revision) {
+    if (revision == null || revision.isBlank()) {
+      throw new IllegalArgumentException("Processing revision required");
+    }
+    this.revision = revision;
     if (maxWords < 20) {
       throw new IllegalArgumentException("maxWords must be at least 20");
     }
@@ -23,7 +32,12 @@ public final class SemanticChunker {
     this.overlapWords = overlapWords;
   }
 
-  public List<KnowledgeChunk> chunk(SourceDocument document, List<ParsedSection> sections) {
+  public String processingVersion() {
+    return revision + ":" + maxWords + ":" + overlapWords;
+  }
+
+  public List<KnowledgeChunk> chunk(
+      SourceScope scope, SourceDocument document, List<ParsedSection> sections) {
     List<KnowledgeChunk> chunks = new ArrayList<>();
     for (var section : sections) {
       List<String> words =
@@ -34,13 +48,14 @@ public final class SemanticChunker {
         String digest = ContentHash.sha256(content);
         int ordinal = chunks.size();
         String stableKey =
-            document.externalId()
-                + ":"
-                + document.sourceVersion()
-                + ":"
-                + ordinal
-                + ":"
-                + digest.substring(0, 16);
+            frame(scope.tenantId())
+                + frame(scope.sourceName())
+                + frame(document.sourceType().name())
+                + frame(document.externalId())
+                + frame(document.sourceVersion())
+                + frame(processingVersion())
+                + frame(Integer.toString(ordinal))
+                + frame(digest);
         var citation =
             new Citation(
                 document.sourceType(),
@@ -67,5 +82,9 @@ public final class SemanticChunker {
       }
     }
     return List.copyOf(chunks);
+  }
+
+  private static String frame(String value) {
+    return value.length() + ":" + value;
   }
 }

@@ -79,13 +79,13 @@ For this project, Docker Compose:
 2. Creates a PostgreSQL container with pgvector support.
 3. On an empty data directory, initializes the local database and user named `akh`.
 4. Maps Mac port `5432` to container port `5432`.
-5. Mounts `database/schema.sql` for first-time database initialization.
+5. Provides the database server; the Java application applies its schema through Flyway at startup.
 6. Stores database files in the persistent `akh-postgres` volume.
 7. Runs `pg_isready` as a health check.
 
 `up` also reconciles configuration changes and may recreate an existing container. A selected service can start its declared dependencies; `postgres` has none here. Detached mode returns control to the terminal without waiting for database readiness. Check `docker compose ps` and the logs before connecting.
 
-The logical volume key is `akh-postgres`; Docker normally prefixes its actual name with the Compose project name. The schema mount is a read-only bind mount from this checkout, while the database volume is Docker-managed storage.
+The logical volume key is `akh-postgres`; Docker normally prefixes its actual name with the Compose project name. The database volume is Docker-managed storage. The former schema bind mount has been removed; Flyway now owns schema creation and upgrades.
 
 The Compose file currently defines only PostgreSQL, so starting all services has the same effect here. It does not build or start the API. Follow the [root README](../../README.md#start-locally) to run Spring Boot with the Maven wrapper.
 
@@ -216,7 +216,7 @@ Use the same file selection for status, logs, and shutdown. Alternatively, set `
 
 ## 9. Build application images
 
-The Java Dockerfile uses a JDK 21 build stage and a non-root JRE 21 runtime. It runs the executable Spring Boot JAR. After building with the direct Docker command below, run it with `docker run --rm -p 8000:8080 agentic-knowledge-hub:local`. The application container defaults to port `8080`; local Maven execution defaults to `8000`. Neither currently connects to PostgreSQL.
+The Java Dockerfile uses a JDK 21 build stage and a non-root JRE 21 runtime. It runs the executable Spring Boot JAR. After building with the direct Docker command below, run it with `docker run --rm -p 8000:8080 agentic-knowledge-hub:local`. The application container defaults to port `8080`; local Maven execution defaults to `8000`. The application now requires PostgreSQL. For Docker Desktop, pass `-e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/akh` to the API container so it reaches the database published by Compose.
 
 This project's `postgres` service uses a prebuilt image and has no `build:` configuration. These generic Compose build commands apply only after a service defines one:
 
@@ -306,7 +306,7 @@ Run from the checkout root, or supply the full Compose path with `-f`. Quote pat
 
 ### macOS mounts or image startup fail
 
-For a mount denied error, check Docker Desktop file-sharing access to the checkout and confirm `database/schema.sql` exists. On Apple silicon, an `exec format error` or missing platform manifest can indicate an incompatible image architecture; inspect the image/platform before forcing emulation. Check Docker Desktop disk and memory availability if startup stalls. Review logs locally; do not share credentials or document content from diagnostics.
+For a mount denied error, check Docker Desktop file-sharing access to the checkout and confirm any configured bind-mount paths exist. The project no longer bind-mounts a schema script. On Apple silicon, an `exec format error` or missing platform manifest can indicate an incompatible image architecture; inspect the image/platform before forcing emulation. Check Docker Desktop disk and memory availability if startup stalls. Review logs locally; do not share credentials or document content from diagnostics.
 
 ### Port `5432` is already in use
 
@@ -329,7 +329,7 @@ The logs normally reveal configuration, permission, initialization, or port prob
 
 ### Schema changes do not appear
 
-Files in `/docker-entrypoint-initdb.d/` execute only when PostgreSQL initializes an empty data directory. Changing `database/schema.sql` does not automatically rerun it against an existing volume. Apply a migration, execute the SQL manually, or intentionally reset the local volume when losing local data is acceptable.
+The earlier Compose setup ran `database/schema.sql` only on an empty data directory. The current setup uses Java Flyway migrations. Restart the application to apply pending migrations; for an earlier untracked schema, follow the explicit adoption command in the [root README](../../README.md#start-locally). Do not edit an applied migration or reset the volume to upgrade a schema.
 
 ## 12. Interview refresh
 

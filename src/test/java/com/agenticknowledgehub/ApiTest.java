@@ -12,14 +12,14 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class ApiTest {
+class ApiTest extends PostgresTestSupport {
   @LocalServerPort private int port;
   private final JsonMapper json = new JsonMapper();
   private final HttpClient client =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
   @Test
-  void livenessWorksWithoutDatabase() throws Exception {
+  void livenessResponds() throws Exception {
     var response =
         client.send(
             HttpRequest.newBuilder(uri("/health/live")).GET().build(),
@@ -30,7 +30,7 @@ class ApiTest {
   }
 
   @Test
-  void preservesSnakeCaseContractAndStatelessRepeatBehavior() throws Exception {
+  void preservesSnakeCaseContractAndPersistsRetries() throws Exception {
     String body =
         """
             {"external_id":"doc","title":"Doc","text":"some useful knowledge"}
@@ -43,7 +43,10 @@ class ApiTest {
     assertEquals(1, result.get("chunk_count").asInt());
     assertEquals(1, result.get("chunk_ids").size());
     assertFalse(result.has("contentHash"));
-    assertEquals(result, json.readTree(post(body).body()));
+    var retry = json.readTree(post(body).body());
+    assertEquals("UNCHANGED", retry.get("status").asString());
+    assertEquals(0, retry.get("chunk_count").asInt());
+    assertEquals(result.get("content_hash"), retry.get("content_hash"));
   }
 
   @Test

@@ -14,6 +14,7 @@ class CitationManifestTest {
     var chunks =
         new SemanticChunker(20, 3)
             .chunk(
+                TestDocuments.SCOPE,
                 TestDocuments.text("unused"),
                 List.of(
                     new ParsedSection(

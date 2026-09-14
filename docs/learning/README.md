@@ -4,6 +4,8 @@ This directory is a practical reference for technologies used by Agentic Knowled
 
 ## Available notes
 
+- [PostgreSQL, pgvector, and transactions](postgres_pgvector_info.md) — durable ingestion, migrations, source locking, rollback, and concurrency tests
+
 - [Java, Spring, and senior-architect learning path](java_spring_architect_info.md) — code walkthrough, design principles, transaction exercises, GCP, and Agentic AI milestones
 
 - [Docker reference](docker_info.md) — concepts, project commands, PostgreSQL access, macOS troubleshooting, and interview notes
@@ -11,7 +13,6 @@ This directory is a practical reference for technologies used by Agentic Knowled
 
 ## Planned notes
 
-- `postgres_pgvector_info.md` — PostgreSQL, SQL, indexes, and vector search
 - `gcp_info.md` — projects, IAM, Cloud Run, Cloud SQL, Storage, and Pub/Sub
 - `vertex_ai_info.md` — embeddings, Gemini, quotas, and grounding
 - `terraform_info.md` — infrastructure as code and GCP deployment

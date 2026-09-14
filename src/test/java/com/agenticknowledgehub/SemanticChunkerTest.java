@@ -10,19 +10,19 @@ import org.junit.jupiter.api.Test;
 
 class SemanticChunkerTest {
   @Test
-  void preservesPythonGoldenChunkIdsOverlapAndCitations() {
+  void preservesScopedGoldenChunkIdsOverlapAndCitations() {
     String words = String.join(" ", IntStream.range(0, 45).mapToObj(i -> "word" + i).toList());
     var section = new ParsedSection(words, List.of("Recovery"), null, 10, 20);
     var chunker = new SemanticChunker(20, 5);
     var document = TestDocuments.text("unused");
-    var chunks = chunker.chunk(document, List.of(section));
+    var chunks = chunker.chunk(TestDocuments.SCOPE, document, List.of(section));
     assertEquals(
         List.of(
-            "03e5d4055cb1e9b48d04dc1fc3c6fab7ce23cc0f8e61f4fa1fea2e8737266135",
-            "0864ed43a7171d959dd9e5f5cb3697e8089318810afe04129377495ae2c776f7",
-            "7d4887c33bff3d4de39d7ad9c9601f4304cff0f8dd6c39b0d08ab8c790579c79"),
+            "e20ee8194203ed00d124738b5a808baa25cea695218086c58c38746bcbdcacf9",
+            "95abf2724aa5283a7e38f500463515932e7e868211248314b33850160dcdf0aa",
+            "96addb8ce3163a9f0685a6b4763fa3ce4ef5d9bbd031520e83923f15eda1e086"),
         chunks.stream().map(KnowledgeChunk::chunkId).toList());
-    assertEquals(chunks, chunker.chunk(document, List.of(section)));
+    assertEquals(chunks, chunker.chunk(TestDocuments.SCOPE, document, List.of(section)));
     assertEquals(List.of(20, 20, 15), chunks.stream().map(KnowledgeChunk::wordCount).toList());
     assertTrue(chunks.get(1).content().startsWith("word15 word16"));
     var citation = chunks.getFirst().citation();
@@ -46,6 +46,7 @@ class SemanticChunkerTest {
     var chunks =
         new SemanticChunker(20, 0)
             .chunk(
+                TestDocuments.SCOPE,
                 TestDocuments.text("unused"),
                 List.of(new ParsedSection("Cloud\u00a0Run\u2003hosts", List.of(), 2, null, null)));
     assertEquals("Cloud Run hosts", chunks.getFirst().content());
