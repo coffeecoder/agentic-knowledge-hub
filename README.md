@@ -15,7 +15,7 @@ The application is implemented in **Java 21 and Spring Boot 4.1.1**, with Maven 
 - PostgreSQL 16 with pgvector, Flyway migrations, and transactional document/chunk persistence
 - Java unit tests, HTTP integration tests, and a reproducible executable JAR build
 
-**Ingestion is durable.** First ingestion returns `CHANGED`; identical content and metadata return `UNCHANGED`, including after an application restart. Changed content atomically replaces the current document's chunks and persists citation metadata. Embedding calls, retrieval, authentication, and agent execution are not implemented yet.
+**Ingestion is durable.** First ingestion returns `CHANGED`; identical content and metadata return `UNCHANGED`, including after an application restart. Changed content atomically replaces the current document's chunks and persists citation metadata. Authorization-aware keyword retrieval is available through `POST /v1/search`. Identity Platform token validation protects both APIs; embedding calls and agent execution are not implemented yet.
 
 The current-document replacement policy does not retain old chunks for historical answers. Read the [persistence decision](docs/architecture/0002-postgresql-persistence.md) and [transaction learning guide](docs/learning/postgres_pgvector_info.md) for the guarantees and tradeoffs.
 
@@ -37,7 +37,7 @@ From the checkout root, start PostgreSQL first:
 
 ```bash
 docker compose up -d postgres
-./mvnw spring-boot:run
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
 Flyway applies V1 and V2 to a **new empty database** at startup. If this is an existing database created by the earlier Compose schema script, adopt it once:
@@ -50,11 +50,12 @@ Explicit adoption verifies the existing schema against V1 before recording a bas
 
 If port `8000` is occupied by the earlier Python process, stop that process or run with `PORT=8001 ./mvnw spring-boot:run` and use the corresponding port in your URLs.
 
-Open [interactive API documentation](http://localhost:8000/docs). The OpenAPI document is at [openapi.json](http://localhost:8000/openapi.json).
+The `dev` profile exposes Swagger but does not bypass authentication. Follow the [Identity Platform guide](docs/learning/gcp_identity_security_info.md) to assign permissions and sign in. Open [interactive API documentation](http://localhost:8000/docs). The OpenAPI document is at [openapi.json](http://localhost:8000/openapi.json).
 
 ```bash
 curl http://localhost:8000/health/live
 curl -X POST http://localhost:8000/v1/documents/text \
+  -H "Authorization: Bearer $AKH_ID_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"external_id":"runbook","title":"Runbook","text":"Cloud Run hosts the API.","source_version":"1","allowed_groups":["support"]}'
 ```
@@ -71,6 +72,21 @@ docker compose exec postgres psql -U akh -d akh
 
 Compose only starts PostgreSQL; it does not start the Java application. Startup requires successful database migrations. During a runtime database outage, nonempty ingestion returns a sanitized HTTP 503 while `/health/live` remains a process-liveness check. There is no in-memory fallback.
 
+## Search locally
+
+Search requires a verified Identity Platform ID token with `knowledge:read`, a tenant, and read groups. Ingestion additionally requires publisher permissions. Start with `SPRING_PROFILES_ACTIVE=dev` for Swagger and use its **Authorize** button with your ID token. There is no simulated identity.
+
+Ingest synthetic documents with `allowed_groups: ["support"]`, then call:
+
+```bash
+curl -X POST http://localhost:8000/v1/search \
+  -H "Authorization: Bearer $AKH_ID_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"Cloud Run deployment","limit":5}'
+```
+
+The response contains `results` with chunk text, document identity, relevance scores, and persisted citations. Queries are bounded to 500 UTF-16 code units and results to 1–20 (default 5). Empty document permissions deny access. Tenant and groups come from administrator-issued signed claims. Request fields and spoofed headers cannot change them. Read the [search and authorization guide](docs/learning/search_authorization_info.md).
+
 ## Configuration
 
 Spring reads environment variables; it does **not** automatically load `.env`. `.env.example` documents current and reserved settings. Set them through your shell, IDE, or container configuration. For example:
@@ -79,7 +95,7 @@ Spring reads environment variables; it does **not** automatically load `.env`. `
 PORT=8080 CHUNK_SIZE_WORDS=550 CHUNK_OVERLAP_WORDS=90 ./mvnw spring-boot:run
 ```
 
-Defaults are port `8000`, chunk size `550` words, and overlap `90` words. Invalid chunk configuration fails startup. Word counts are not model token counts. Database settings are active: `SPRING_DATASOURCE_URL` (JDBC URL), `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`. Local defaults match Compose. `AKH_TENANT=local` and `AKH_SOURCE_NAME=manual-text` define trusted local source scope; they are configuration, not user-supplied authorization. GCP settings remain reserved.
+Defaults are port `8000`, chunk size `550` words, and overlap `90` words. Invalid chunk configuration fails startup. Word counts are not model token counts. Database settings are active: `SPRING_DATASOURCE_URL` (JDBC URL), `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`. Local defaults match Compose. `AKH_TENANT=local` is the default scope for internal service callers; HTTP ingestion derives tenant from validated claims. `AKH_SOURCE_NAME=manual-text` selects the source and must match the publisher grant. `GCP_PROJECT_ID` selects the Identity Platform issuer/audience (default `agentic-knowledge-hub-learning`).
 
 The connection pool permits at most five connections per application instance. Preparation occurs outside the transaction; the write transaction uses READ COMMITTED and a 15-second timeout. Processing identity includes `PROCESSING_REVISION` (default `parsers-v1/chunker-v2`) and both chunk settings. Bump the revision when parser semantics change to rebuild unchanged source bytes on the next ingestion. Never commit real credentials.
 
@@ -114,9 +130,9 @@ The container defaults to `PORT=8080`, accepts an override, and listens on all i
 
 ## Security and current limitations
 
-Use only synthetic or public content in this portfolio repository. Never add HP, Ascendion, AAVA, customer, credential or personally identifiable data. The local API is unauthenticated and must not be exposed as an enterprise service before authorization and input/resource limits are implemented.
+Use only synthetic or public content in this portfolio repository. Never add HP, Ascendion, AAVA, customer, credential or personally identifiable data. The API validates Identity Platform tokens and enforces application permissions. Production deployment still needs TLS, resource/rate limits, operational monitoring and a revocation strategy.
 
-Retrieved content is untrusted data. Citation validation checks IDs, not factual entailment or citation coverage. Parser anchors identify source sections; overlapping chunks inherit those section-level anchors. PDF layout extraction may differ from the former Python parser, and OCR, DOCX tables, and embedded objects are not supported. Chunk IDs now include tenant/source scope and processing version, so they intentionally differ from the earlier baseline. Permissions are stored on the document; future retrieval must join and filter them before selecting evidence. The current source lock serializes writes per source. Upstream versions are opaque strings: a delayed old update can replace current content, so connectors will need an ordering/conflict policy.
+Retrieved content is untrusted data. Citation validation checks IDs, not factual entailment or citation coverage. Parser anchors identify source sections; overlapping chunks inherit those section-level anchors. PDF layout extraction may differ from the former Python parser, and OCR, DOCX tables, and embedded objects are not supported. Chunk IDs now include tenant/source scope and processing version, so they intentionally differ from the earlier baseline. Permissions are stored on the document and keyword retrieval filters them in SQL. The dev profile only exposes Swagger; API authentication remains mandatory. Already-issued tokens are not checked for account disablement/revocation on every request. The current source lock serializes writes per source. Upstream versions are opaque strings: a delayed old update can replace current content, so connectors will need an ordering/conflict policy.
 
 ## Design
 
@@ -124,12 +140,16 @@ Retrieved content is untrusted data. Citation validation checks IDs, not factual
 - [Complete architecture](docs/complete-architecture.png)
 - [Java migration decision and compatibility boundaries](docs/architecture/0001-java-spring-migration.md)
 - [PostgreSQL persistence decision](docs/architecture/0002-postgresql-persistence.md)
+- [Identity Platform authentication decision](docs/architecture/0004-identity-platform-authentication.md)
+- [Authorized keyword search decision](docs/architecture/0003-authorized-keyword-search.md)
 
 ## Learning notes
 
 - [Technical learning index](docs/learning/README.md)
 - [Java, Spring, and senior-architect learning path](docs/learning/java_spring_architect_info.md)
 - [PostgreSQL, pgvector, and transactions](docs/learning/postgres_pgvector_info.md)
+- [GCP Identity Platform and Spring Security](docs/learning/gcp_identity_security_info.md)
+- [Keyword search and authorization](docs/learning/search_authorization_info.md)
 - [Docker reference](docs/learning/docker_info.md)
 - [Git and GitHub reference](docs/learning/git_github_info.md)
 

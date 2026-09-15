@@ -11,7 +11,9 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+@org.springframework.test.context.ActiveProfiles("dev")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@org.springframework.context.annotation.Import(TestIdentity.class)
 class ApiTest extends PostgresTestSupport {
   @LocalServerPort private int port;
   private final JsonMapper json = new JsonMapper();
@@ -90,6 +92,19 @@ class ApiTest extends PostgresTestSupport {
     assertTrue(docs.statusCode() == 302 || docs.statusCode() == 200);
   }
 
+  @Test
+  void searchWithoutTokenIsDenied() throws Exception {
+    var response =
+        client.send(
+            HttpRequest.newBuilder(uri("/v1/search"))
+                .header("Content-Type", "application/json")
+                .header("X-Groups", "admin")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"query\":\"deployment\"}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+    assertEquals(401, response.statusCode());
+  }
+
   private URI uri(String path) {
     return URI.create("http://localhost:" + port + path);
   }
@@ -98,6 +113,7 @@ class ApiTest extends PostgresTestSupport {
     return client.send(
         HttpRequest.newBuilder(uri("/v1/documents/text"))
             .timeout(Duration.ofSeconds(10))
+            .header("Authorization", "Bearer " + TestIdentity.token("local"))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build(),

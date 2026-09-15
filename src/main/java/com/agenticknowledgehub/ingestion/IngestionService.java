@@ -27,6 +27,10 @@ public final class IngestionService {
   }
 
   public IngestionResult ingest(SourceDocument document) {
+    return ingest(scope, document);
+  }
+
+  public IngestionResult ingest(SourceScope scope, SourceDocument document) {
     String hash = ContentHash.sha256(document.content());
     // Preparation stays outside the transaction; concurrent writers recheck durable state under
     // lock.

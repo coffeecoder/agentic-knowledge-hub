@@ -14,10 +14,12 @@ import org.springframework.boot.test.web.server.LocalServerPort;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "spring.flyway.enabled=false",
+      "spring.profiles.active=dev",
       "spring.datasource.url=jdbc:postgresql://127.0.0.1:1/unavailable",
       "spring.datasource.hikari.connection-timeout=250",
       "spring.datasource.hikari.initialization-fail-timeout=-1"
     })
+@org.springframework.context.annotation.Import(TestIdentity.class)
 class DatabaseUnavailableApiTest {
   @LocalServerPort int port;
 
@@ -36,6 +38,7 @@ class DatabaseUnavailableApiTest {
           client.send(
               HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/documents/text"))
                   .timeout(Duration.ofSeconds(5))
+                  .header("Authorization", "Bearer " + TestIdentity.token("local"))
                   .header("Content-Type", "application/json")
                   .POST(
                       HttpRequest.BodyPublishers.ofString(
@@ -46,6 +49,26 @@ class DatabaseUnavailableApiTest {
       assertTrue(response.body().contains("Document persistence unavailable"));
       assertFalse(response.body().contains("sensitive"));
       assertFalse(response.body().contains("jdbc"));
+    }
+  }
+
+  @Test
+  void searchReturnsSanitized503OnDatabaseOutage() throws Exception {
+    try (var client = HttpClient.newHttpClient()) {
+      var response =
+          client.send(
+              HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/search"))
+                  .timeout(Duration.ofSeconds(5))
+                  .header("Authorization", "Bearer " + TestIdentity.token("local"))
+                  .header("Content-Type", "application/json")
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"query\":\"synthetic-sensitive-query\"}"))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+      assertEquals(503, response.statusCode());
+      assertTrue(response.body().contains("Search unavailable"));
+      assertFalse(response.body().contains("sensitive"));
     }
   }
 }

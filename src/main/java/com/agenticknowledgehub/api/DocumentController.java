@@ -1,7 +1,7 @@
 package com.agenticknowledgehub.api;
 
-import com.agenticknowledgehub.ingestion.IngestionService;
 import com.agenticknowledgehub.model.*;
+import com.agenticknowledgehub.security.AuthorizedIngestionService;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -9,12 +9,13 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 public class DocumentController {
-  private final IngestionService ingestion;
+  private final AuthorizedIngestionService ingestion;
 
-  public DocumentController(IngestionService ingestion) {
+  public DocumentController(AuthorizedIngestionService ingestion) {
     this.ingestion = ingestion;
   }
 
+  @io.swagger.v3.oas.annotations.security.SecurityRequirements
   @GetMapping("/health/live")
   public Map<String, String> liveness() {
     return Map.of("status", "UP", "version", "0.1.0");

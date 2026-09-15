@@ -4,6 +4,8 @@ This directory is a practical reference for technologies used by Agentic Knowled
 
 ## Available notes
 
+- [Keyword search and authorization](search_authorization_info.md) — local identity, permission filters, PostgreSQL ranking, and retrieval tests
+
 - [PostgreSQL, pgvector, and transactions](postgres_pgvector_info.md) — durable ingestion, migrations, source locking, rollback, and concurrency tests
 
 - [Java, Spring, and senior-architect learning path](java_spring_architect_info.md) — code walkthrough, design principles, transaction exercises, GCP, and Agentic AI milestones
@@ -21,3 +23,5 @@ This directory is a practical reference for technologies used by Agentic Knowled
 Keep the root `README.md` focused on running and understanding the application. Store reusable learning material here so it can grow without making the project overview difficult to navigate.
 
 Suggested order: run the [Java project](../../README.md), read the Java/Spring learning path, then use the Git and Docker references during each milestone. Python source is historical; the active implementation is Java.
+
+- [GCP Identity Platform and Spring Security](gcp_identity_security_info.md): token validation, application permissions, publisher scope, and local sign-in.

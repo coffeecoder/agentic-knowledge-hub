@@ -25,4 +25,19 @@ public class ApiExceptionHandler {
   public ResponseEntity<Map<String, String>> persistenceUnavailable() {
     return ResponseEntity.status(503).body(Map.of("detail", "Document persistence unavailable"));
   }
+
+  @ExceptionHandler(com.agenticknowledgehub.security.SearchAccessDeniedException.class)
+  public ResponseEntity<Map<String, String>> searchDenied() {
+    return ResponseEntity.status(403).body(Map.of("detail", "Search identity unavailable"));
+  }
+
+  @ExceptionHandler(com.agenticknowledgehub.retrieval.InvalidSearchException.class)
+  public ResponseEntity<Map<String, String>> invalidSearch() {
+    return ResponseEntity.unprocessableContent().body(Map.of("detail", "Invalid search request"));
+  }
+
+  @ExceptionHandler(com.agenticknowledgehub.retrieval.SearchUnavailableException.class)
+  public ResponseEntity<Map<String, String>> searchUnavailable() {
+    return ResponseEntity.status(503).body(Map.of("detail", "Search unavailable"));
+  }
 }
