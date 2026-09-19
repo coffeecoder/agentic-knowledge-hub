@@ -21,7 +21,7 @@ class MigrationIntegrationTest extends PostgresTestSupport {
     var ds = database();
     var flyway = flyway(ds);
     flyway.migrate();
-    assertEquals("2", flyway.info().current().getVersion().toString());
+    assertEquals("3", flyway.info().current().getVersion().toString());
     assertEquals(0, flyway.migrate().migrationsExecuted);
   }
 

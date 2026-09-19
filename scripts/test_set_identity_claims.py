@@ -3,6 +3,7 @@ import io
 import json
 import subprocess
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 import set_identity_claims as setup
@@ -40,6 +41,28 @@ class ClaimsSetupTest(unittest.TestCase):
         self.assertIn("permissions verified", output.getvalue())
         self.assertNotIn("synthetic-token", output.getvalue())
         self.assertEqual(3, len(requests))
+        for request in requests:
+            self.assertEqual("synthetic-project", request.get_header("X-goog-user-project"))
+
+    def test_http_failure_reports_stage_without_response_or_token(self):
+        args = ["setup", "--project", "synthetic-project", "--uid", "synthetic", "--access", "publisher", "--apply"]
+        failure = urllib.error.HTTPError("https://example.invalid", 403, "sensitive-detail", {}, io.BytesIO(b"sensitive-body"))
+        with patch("sys.argv", args), patch(
+            "subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="sensitive-token")
+        ), patch("urllib.request.urlopen", side_effect=failure):
+            with self.assertRaises(setup.SetupError) as caught:
+                setup.main()
+        self.assertIn("lookup failed (HTTP 403)", str(caught.exception))
+        self.assertNotIn("sensitive", str(caught.exception))
+
+    def test_gcloud_failure_does_not_expose_captured_output(self):
+        args = ["setup", "--project", "synthetic-project", "--uid", "synthetic", "--access", "publisher", "--apply"]
+        failure = subprocess.CalledProcessError(1, "gcloud", output="sensitive-token", stderr="sensitive-detail")
+        with patch("sys.argv", args), patch("subprocess.run", side_effect=failure):
+            with self.assertRaises(setup.SetupError) as caught:
+                setup.main()
+        self.assertIn("credential acquisition failed", str(caught.exception))
+        self.assertNotIn("sensitive", str(caught.exception))
 
     def test_unknown_user_never_triggers_update(self):
         args = ["setup", "--project", "synthetic-project", "--uid", "missing", "--access", "publisher", "--apply"]

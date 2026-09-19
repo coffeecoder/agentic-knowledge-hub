@@ -32,8 +32,10 @@ public class IngestionConfiguration {
       ParserRegistry parsers,
       SemanticChunker chunker,
       TransactionalDocumentWriter writer,
-      SourceScope scope) {
-    return new IngestionService(parsers, chunker, writer, scope);
+      SourceScope scope,
+      com.agenticknowledgehub.embeddings.EmbeddingProvider embeddings,
+      @Value("${akh.embedding.max-chunks:16}") int maxChunks) {
+    return new IngestionService(parsers, chunker, writer, scope, embeddings, maxChunks);
   }
 
   @Bean

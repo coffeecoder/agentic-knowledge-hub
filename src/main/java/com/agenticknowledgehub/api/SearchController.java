@@ -20,7 +20,8 @@ public class SearchController {
   @PostMapping("/v1/search")
   public SearchResponse search(@RequestBody SearchRequest request) {
     return new SearchResponse(
-        retrieval.search(callers.currentCaller(), request.query(), request.limit()));
+        retrieval.search(
+            callers.currentCaller(), request.query(), request.limit(), request.mode()));
   }
 
   @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)

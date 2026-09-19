@@ -4,7 +4,11 @@ This directory is a practical reference for technologies used by Agentic Knowled
 
 ## Available notes
 
-- [Keyword search and authorization](search_authorization_info.md) — local identity, permission filters, PostgreSQL ranking, and retrieval tests
+- [GCP Identity Platform and Spring Security](gcp_identity_security_info.md) — token validation, application permissions, publisher scope, and local sign-in
+
+- [Configurable embeddings and semantic search](embeddings_semantic_search_info.md) — Vertex AI, Ollama, offline development, ADC, vector compatibility, transactions, troubleshooting, and live validation
+
+- [Keyword search and authorization](search_authorization_info.md) — trusted identity, permission filters, PostgreSQL ranking, and retrieval tests
 
 - [PostgreSQL, pgvector, and transactions](postgres_pgvector_info.md) — durable ingestion, migrations, source locking, rollback, and concurrency tests
 
@@ -16,12 +20,9 @@ This directory is a practical reference for technologies used by Agentic Knowled
 ## Planned notes
 
 - `gcp_info.md` — projects, IAM, Cloud Run, Cloud SQL, Storage, and Pub/Sub
-- `vertex_ai_info.md` — embeddings, Gemini, quotas, and grounding
 - `terraform_info.md` — infrastructure as code and GCP deployment
 - `rag_agentic_ai_info.md` — ingestion, chunking, retrieval, citations, and agents
 
 Keep the root `README.md` focused on running and understanding the application. Store reusable learning material here so it can grow without making the project overview difficult to navigate.
 
-Suggested order: run the [Java project](../../README.md), read the Java/Spring learning path, then use the Git and Docker references during each milestone. Python source is historical; the active implementation is Java.
-
-- [GCP Identity Platform and Spring Security](gcp_identity_security_info.md): token validation, application permissions, publisher scope, and local sign-in.
+Suggested order: run the [Java project](../../README.md), read the Java/Spring learning path, configure Identity Platform, then work through configurable embeddings and semantic search. Use the Git, Docker and PostgreSQL references during each milestone. Python source is historical; the active implementation is Java.

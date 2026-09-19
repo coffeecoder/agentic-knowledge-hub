@@ -1,6 +1,8 @@
 package com.agenticknowledgehub.config;
 
+import com.agenticknowledgehub.embeddings.EmbeddingProvider;
 import com.agenticknowledgehub.persistence.JdbcChunkSearchRepository;
+import com.agenticknowledgehub.persistence.JdbcVectorSearchRepository;
 import com.agenticknowledgehub.retrieval.*;
 import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,7 +16,15 @@ public class SearchConfiguration {
   }
 
   @Bean
-  RetrievalService retrievalService(ChunkSearchRepository repository) {
-    return new RetrievalService(repository);
+  VectorSearchRepository vectorSearchRepository(JdbcTemplate jdbc, JsonMapper json) {
+    return new JdbcVectorSearchRepository(jdbc, json);
+  }
+
+  @Bean
+  RetrievalService retrievalService(
+      ChunkSearchRepository repository,
+      VectorSearchRepository vectors,
+      EmbeddingProvider embeddings) {
+    return new RetrievalService(repository, vectors, embeddings);
   }
 }

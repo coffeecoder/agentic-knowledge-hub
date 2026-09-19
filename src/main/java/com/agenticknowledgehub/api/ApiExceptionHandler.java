@@ -11,6 +11,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(com.agenticknowledgehub.embeddings.EmbeddingUnavailableException.class)
+  public ResponseEntity<Map<String, String>> embeddingUnavailable() {
+    return ResponseEntity.status(503).body(Map.of("detail", "Embedding service unavailable"));
+  }
+
+  @ExceptionHandler(com.agenticknowledgehub.embeddings.EmbeddingInputException.class)
+  public ResponseEntity<Map<String, String>> embeddingInput() {
+    return ResponseEntity.unprocessableContent()
+        .body(Map.of("detail", "Embedding input exceeds limits or was rejected"));
+  }
+
   @ExceptionHandler({
     MethodArgumentNotValidException.class,
     HttpMessageNotReadableException.class,

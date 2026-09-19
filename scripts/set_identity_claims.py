@@ -9,6 +9,21 @@ import urllib.error
 import urllib.request
 
 
+class SetupError(ValueError):
+    """Only fixed, application-owned diagnostic text may be used here."""
+
+
+def http_failure(operation: str, status: int) -> str:
+    advice = {
+        400: "Check the project, user pool, UID and custom-claim constraints.",
+        401: "Authorize Cloud Shell and check the active gcloud account.",
+        403: "Check administrator IAM permissions and whether Identity Toolkit API is enabled; do not grant broad roles blindly.",
+        404: "Check the project and user identifier.",
+        429: "Request quota exceeded; wait before retrying.",
+    }.get(status, "Check Google service availability and network access.")
+    return f"Identity Platform {operation} failed (HTTP {status}). {advice}"
+
+
 def application_claims(tenant: str, group: str, source: str, access: str) -> dict:
     return {
         "tenant": tenant,
@@ -38,41 +53,52 @@ def main() -> None:
         print(json.dumps({"akh": desired}, indent=2))
         print("Preview only. Add --apply to update the specified user.")
         return
-    token = subprocess.run(["gcloud", "auth", "print-access-token"], check=True,
-                           capture_output=True, text=True, timeout=60).stdout.strip()
+    try:
+        token = subprocess.run(["gcloud", "auth", "print-access-token"], check=True,
+                               capture_output=True, text=True, timeout=60).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        raise SetupError("gcloud credential acquisition failed. In Cloud Shell run: gcloud auth print-access-token >/dev/null ; complete any Authorize prompt, then retry.") from None
     if not token:
-        raise ValueError("No administrator credential")
+        raise SetupError("No administrator credential")
     base = f"https://identitytoolkit.googleapis.com/v1/projects/{args.project}/accounts:"
 
     def request(operation: str, payload: dict) -> dict:
         req = urllib.request.Request(base + operation, data=json.dumps(payload).encode(),
-            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return json.load(response)
+            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
+                     "x-goog-user-project": args.project})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            raise SetupError(http_failure(operation, error.code)) from None
+        except OSError:
+            raise SetupError(f"Identity Platform {operation} network request failed. Check connectivity; an update may have completed, so retry to verify.") from None
 
     def read_claims() -> dict:
         users = request("lookup", {"localId": [args.uid]}).get("users", [])
         if len(users) != 1 or users[0].get("localId") != args.uid:
-            raise ValueError("User not found")
+            raise SetupError("User not found")
         claims = json.loads(users[0].get("customAttributes", "{}"))
         if not isinstance(claims, dict):
-            raise ValueError("Invalid existing custom claims")
+            raise SetupError("Invalid existing custom claims")
         return claims
 
     claims = read_claims()
     claims["akh"] = desired
     encoded = json.dumps(claims, separators=(",", ":"), ensure_ascii=False)
     if len(encoded.encode()) > 1000:
-        raise ValueError("Custom claims exceed 1000 bytes")
+        raise SetupError("Custom claims exceed 1000 bytes")
     # Preserve other namespaces; accounts:update replaces the entire customAttributes object.
     request("update", {"localId": args.uid, "customAttributes": encoded})
     if read_claims().get("akh") != desired:
-        raise ValueError("Read-back verification failed")
+        raise SetupError("Read-back verification failed")
     print("Application permissions verified. Sign in again to obtain a new ID token.")
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except SetupError as error:
+        sys.exit(str(error))
+    except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
         sys.exit("Permission setup failed. Check gcloud sign-in, project, UID and firebaseauth.users.get/update access. No credentials or response details were printed.")

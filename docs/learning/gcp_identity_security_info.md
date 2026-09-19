@@ -6,7 +6,7 @@ Identity Platform authenticates a user and issues a signed ID token. Spring Secu
 
 The application never uses your email as authorization, stores your password, or grants permissions from HTTP request fields. A UID identifies an account; it is not a credential. GCP IAM permissions for administrators and application permissions for end users are separate systems.
 
-Implemented: authentication, scoped publisher authorization, authorized keyword search, and transactional ingestion. Not implemented: hosted login UI, live revocation checks, Cloud Run deployment, embeddings, generation or agent execution.
+Implemented: authentication, scoped publisher authorization, authorized keyword/semantic search, configurable embeddings, and transactional ingestion. See the [embedding guide](embeddings_semantic_search_info.md) for provider setup. Not implemented: hosted login UI, live revocation checks, Cloud Run deployment, generation or agent execution.
 
 ## 2. The permission contract
 
@@ -55,7 +55,10 @@ Run the following in your own terminal, not in a shared transcript. It prompts f
 
 ```bash
 python3 - <<'PY'
-import getpass, json, subprocess, urllib.parse, urllib.request
+import getpass, json, shutil, subprocess, urllib.error, urllib.parse, urllib.request
+if not shutil.which('pbcopy'):
+    raise SystemExit('Run this script in your Mac Terminal, not Cloud Shell: pbcopy is unavailable.')
+stage = 'input'
 try:
     api_key = getpass.getpass('Identity Platform Web API key: ')
     email = getpass.getpass('Learning user email (hidden): ')
@@ -64,12 +67,38 @@ try:
     req = urllib.request.Request(url, data=json.dumps({
         'email': email, 'password': password, 'returnSecureToken': True
     }).encode(), headers={'Content-Type': 'application/json'})
+    stage = 'sign-in request'
     with urllib.request.urlopen(req, timeout=30) as response:
         result = json.load(response)
-    subprocess.run(['pbcopy'], input=result['idToken'], text=True, check=True)
+    if 'idToken' not in result:
+        raise SystemExit('No ID token returned. MFA or another sign-in challenge may require a client SDK.')
+    stage = 'clipboard copy'
+    subprocess.run(['pbcopy'], input=result['idToken'], text=True, check=True, capture_output=True)
     print('ID token copied. Paste it into Swagger Authorize, then clear the clipboard.')
+except urllib.error.HTTPError as error:
+    known = {'INVALID_LOGIN_CREDENTIALS', 'INVALID_PASSWORD', 'EMAIL_NOT_FOUND',
+             'INVALID_EMAIL', 'USER_DISABLED', 'OPERATION_NOT_ALLOWED',
+             'PASSWORD_LOGIN_DISABLED', 'TOO_MANY_ATTEMPTS_TRY_LATER',
+             'API_KEY_INVALID', 'API_KEY_SERVICE_BLOCKED',
+             'API_KEY_HTTP_REFERRER_BLOCKED', 'API_KEY_IP_ADDRESS_BLOCKED',
+             'PROJECT_NOT_FOUND', 'CONFIGURATION_NOT_FOUND', 'SERVICE_DISABLED',
+             'BILLING_DISABLED', 'CAPTCHA_CHECK_FAILED', 'MISSING_RECAPTCHA_TOKEN'}
+    codes = set()
+    try:
+        detail = json.load(error).get('error', {})
+        code = detail.get('message', '').split(' : ')[0]
+        if code in known:
+            codes.add(code)
+        for item in detail.get('details', []):
+            if item.get('reason') in known:
+                codes.add(item['reason'])
+    except Exception:
+        pass
+    print('Sign-in HTTP', error.code, '|', ', '.join(sorted(codes)) or 'UNCLASSIFIED_ERROR')
+except urllib.error.URLError:
+    print('Sign-in network/TLS failure. Check connectivity and Python certificate setup.')
 except Exception:
-    print('Sign-in failed. Check provider, credentials, API key restrictions and network access.')
+    print('Failed during', stage, '; credentials and response details were not printed.')
 PY
 ```
 
@@ -141,3 +170,11 @@ git diff --check
 Tests generate RSA keys and sign synthetic tokens. Real HTTP tests reject forged/expired/wrong-project tokens and denied writes, and use disposable PostgreSQL to verify tenant isolation, retries and replacement. Existing rollback and concurrency tests remain active. These tests need Docker but no GCP credentials; live sign-in and Google key retrieval are separate manual checks.
 
 Return to the [learning index](README.md).
+
+## Troubleshooting permission assignment
+
+The helper reports the failing stage and HTTP status without printing Google's response body or credentials. A gcloud credential failure happens before any account update. In Cloud Shell run `gcloud auth list --filter=status:ACTIVE` to inspect the selected administrator, then `gcloud auth print-access-token >/dev/null` to trigger credential authorization without displaying the token. Complete the Cloud Shell Authorize prompt if shown and retry the helper.
+
+HTTP 403 means the service refused the request; check the selected administrator's IAM permissions and API enablement rather than assuming the end user's application claims are wrong. HTTP 400 indicates a rejected request; check project, UID, user pool and claim constraints. Share only the helper's sanitized diagnostic. If an update succeeded but read-back failed, the assignment may already exist; retry the same desired assignment to verify it.
+
+The helper sends `x-goog-user-project` using `--project` for every lookup and update. Direct REST calls using Cloud Shell user credentials can require this explicit quota project even when the resource project is already in the URL. If the API is enabled and your IAM role permits the operation, check this header before changing roles. See [Google REST authentication guidance](https://docs.cloud.google.com/docs/authentication/rest). The caller also needs `serviceusage.services.use` on that quota project.

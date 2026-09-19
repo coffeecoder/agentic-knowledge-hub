@@ -14,8 +14,14 @@ public class TransactionalDocumentWriter {
     this.repository = repository;
   }
 
+  @Transactional(readOnly = true, timeout = 5)
+  public boolean isUnchanged(PreparedDocument prepared) {
+    return repository.isUnchanged(prepared);
+  }
+
   @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 15)
   public IngestionResult write(PreparedDocument prepared) {
+    prepared.requireReady();
     var sourceId = repository.lockSource(prepared.scope(), prepared.document().sourceType());
     if (repository.isUnchanged(sourceId, prepared)) {
       return new IngestionResult(UNCHANGED, prepared.contentHash(), List.of());

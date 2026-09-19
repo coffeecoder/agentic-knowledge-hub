@@ -4,8 +4,10 @@ import com.agenticknowledgehub.model.SourceScope;
 import com.agenticknowledgehub.model.SourceType;
 import java.util.UUID;
 
-/** All operations run on the writer's transaction-bound connection. */
+/** Write operations run on the writer's transaction-bound connection. */
 public interface DocumentRepository {
+  boolean isUnchanged(PreparedDocument prepared);
+
   UUID lockSource(SourceScope scope, SourceType type);
 
   boolean isUnchanged(UUID sourceId, PreparedDocument prepared);

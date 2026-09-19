@@ -15,7 +15,7 @@ The application is implemented in **Java 21 and Spring Boot 4.1.1**, with Maven 
 - PostgreSQL 16 with pgvector, Flyway migrations, and transactional document/chunk persistence
 - Java unit tests, HTTP integration tests, and a reproducible executable JAR build
 
-**Ingestion is durable.** First ingestion returns `CHANGED`; identical content and metadata return `UNCHANGED`, including after an application restart. Changed content atomically replaces the current document's chunks and persists citation metadata. Authorization-aware keyword retrieval is available through `POST /v1/search`. Identity Platform token validation protects both APIs; embedding calls and agent execution are not implemented yet.
+**Ingestion is durable.** First ingestion returns `CHANGED`; identical content and metadata return `UNCHANGED`, including after an application restart. Changed content atomically replaces the current document's chunks and persists citation metadata. Authorization-aware keyword retrieval is available through `POST /v1/search`. Identity Platform token validation protects both APIs. Configurable embedding providers and authorized semantic search are implemented; answer generation and agent execution remain future work.
 
 The current-document replacement policy does not retain old chunks for historical answers. Read the [persistence decision](docs/architecture/0002-postgresql-persistence.md) and [transaction learning guide](docs/learning/postgres_pgvector_info.md) for the guarantees and tradeoffs.
 
@@ -40,13 +40,13 @@ docker compose up -d postgres
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
-Flyway applies V1 and V2 to a **new empty database** at startup. If this is an existing database created by the earlier Compose schema script, adopt it once:
+Flyway applies V1–V3 to a **new empty database** at startup. If this is an existing database created by the earlier Compose schema script, adopt it once:
 
 ```bash
 ./mvnw spring-boot:run -Dspring-boot.run.arguments="--akh.database.adopt-legacy=true"
 ```
 
-Explicit adoption verifies the existing schema against V1 before recording a baseline and applying V2. Schema drift or duplicate document versions stop the upgrade for manual reconciliation. Do not enable automatic baselining or delete the Docker volume to bypass an error. After adoption, use the normal startup command. `database/schema.sql` is a legacy V1 reference; Flyway migrations are now authoritative.
+Explicit adoption verifies the existing schema against V1 before recording a baseline and applying the subsequent migrations. Schema drift or duplicate document versions stop the upgrade for manual reconciliation. Do not enable automatic baselining or delete the Docker volume to bypass an error. After adoption, use the normal startup command. `database/schema.sql` is a legacy V1 reference; Flyway migrations are now authoritative.
 
 If port `8000` is occupied by the earlier Python process, stop that process or run with `PORT=8001 ./mvnw spring-boot:run` and use the corresponding port in your URLs.
 
@@ -86,6 +86,27 @@ curl -X POST http://localhost:8000/v1/search \
 ```
 
 The response contains `results` with chunk text, document identity, relevance scores, and persisted citations. Queries are bounded to 500 UTF-16 code units and results to 1–20 (default 5). Empty document permissions deny access. Tenant and groups come from administrator-issued signed claims. Request fields and spoofed headers cannot change them. Read the [search and authorization guide](docs/learning/search_authorization_info.md).
+
+## Semantic search and embedding providers
+
+Embedding generation is opt-in. Choose `EMBEDDING_PROVIDER=none` (default keyword-only), `local-hash` (deterministic offline pipeline demo), `ollama` (real local model), or `vertex` (Google ADC). Local-hash is not a learned semantic model. All modes retain Identity Platform API authentication.
+
+```bash
+# Exercise the full vector pipeline without model downloads or cloud inference.
+EMBEDDING_PROVIDER=local-hash SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
+```
+
+Ingest a support document, then use Swagger with your token:
+
+```json
+{"query":"Cloud Run deployment","limit":5,"mode":"semantic"}
+```
+
+Omit `mode` to keep keyword search. The vector path ranks authorized, compatible embeddings by exact cosine similarity and returns persisted citations. Semantic scores are not probabilities; there is no relevance cutoff yet.
+
+Read the [embedding and semantic search guide](docs/learning/embeddings_semantic_search_info.md) for Ollama/Vertex setup, ADC, limits, and provider switching. Switching provider/model/revision requires explicit re-ingestion; incompatible vectors are excluded rather than mixed. V3 preserves existing database rows. Inference runs before the write transaction; chunks, vectors and citations commit atomically. Existing identical documents without vectors are rebuilt on ingestion when embeddings are enabled. A complete identical retry avoids model calls.
+
+The local-hash pipeline and live Vertex AI path have been manually verified with synthetic content. The live check proves connectivity and end-to-end semantic retrieval; it is not a production-quality evaluation of relevance, latency, cost or quota capacity.
 
 ## Configuration
 
@@ -140,6 +161,7 @@ Retrieved content is untrusted data. Citation validation checks IDs, not factual
 - [Complete architecture](docs/complete-architecture.png)
 - [Java migration decision and compatibility boundaries](docs/architecture/0001-java-spring-migration.md)
 - [PostgreSQL persistence decision](docs/architecture/0002-postgresql-persistence.md)
+- [Configurable embeddings decision](docs/architecture/0005-configurable-embeddings.md)
 - [Identity Platform authentication decision](docs/architecture/0004-identity-platform-authentication.md)
 - [Authorized keyword search decision](docs/architecture/0003-authorized-keyword-search.md)
 
@@ -148,6 +170,7 @@ Retrieved content is untrusted data. Citation validation checks IDs, not factual
 - [Technical learning index](docs/learning/README.md)
 - [Java, Spring, and senior-architect learning path](docs/learning/java_spring_architect_info.md)
 - [PostgreSQL, pgvector, and transactions](docs/learning/postgres_pgvector_info.md)
+- [Configurable embeddings and semantic search](docs/learning/embeddings_semantic_search_info.md)
 - [GCP Identity Platform and Spring Security](docs/learning/gcp_identity_security_info.md)
 - [Keyword search and authorization](docs/learning/search_authorization_info.md)
 - [Docker reference](docs/learning/docker_info.md)

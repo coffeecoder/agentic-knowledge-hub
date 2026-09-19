@@ -99,6 +99,6 @@ Exercises:
 4. Compare keyword and quoted-phrase searches. Explain why a relevance score cannot establish factual correctness.
 5. Explain how the JWT identity adapter validates issuer, audience, signature, and trusted claim mapping rather than decode arbitrary claims.
 
-Next milestones: live identity verification, then Vertex AI embeddings/hybrid retrieval, grounded generation, evaluation, and bounded agent tools. The existing authorization boundary must remain effective when vector retrieval is introduced.
+Configurable embeddings and semantic search are now available; see the [embedding guide](embeddings_semantic_search_info.md). Next milestones include retrieval-quality evaluation, hybrid retrieval, grounded generation and bounded agent tools. The existing authorization boundary must remain effective when vector retrieval is introduced.
 
 Return to the [learning index](README.md).
